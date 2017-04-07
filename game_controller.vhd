@@ -186,6 +186,7 @@ architecture behaviour of game_controller is
 
     -- Declare game variables
     signal score : integer; -- Max 9999
+	 signal lives : integer; -- 3 lives 
     signal aliens_move_right : std_logic;
     signal current_state : state;
 
@@ -235,9 +236,16 @@ begin
 							current_state <= gameplay;
 							end if;
                 when gameplay =>
-						if(score = 60) then 
+						if(score = 60 or lives = 3) then 
 						-- winning the game
 							current_state<= game_over;
+						--elsif(alien_bullet.visible = '1' and 
+						--alien_bullet.y_pos>= ALIEN_HEIGHT_BOTTOM and alien_bullet.y_pos<= SCREEN_HEIGHT and 
+						--alien_bullet.x_pos>= ship.x_pos and alien_bullet.x_pos<= ship.x_pos+SPRITE_WIDTH) then
+						--	if(not(lives=3)) then
+							--	lives<= lives+1;
+								--alien_bullet.visible = '0';
+							
 						else 
 						--check if aliens at the bottom, then game over
 							for i in 0 to NUM_ALIENS-1 loop
@@ -262,7 +270,8 @@ begin
 		 variable alien_offset_x : integer := 0;
  		 variable alien_offset_y : integer := 0;
 		 variable alien_move_ctr : integer := 0;
-		 variable alien_down_ctr : integer := 0;
+		 variable alien_down_ctr : integer := 0; 
+		 
 
     begin
 	     if rising_edge(clk) then
@@ -272,6 +281,7 @@ begin
 					alien_down_ctr := 0;
 					alien_move_ctr := 0;
 					aliens_move_right <= '1';
+					lives <= 0;
 
 					-- Put ship mid
 					ship.x_pos <= 155;
@@ -398,14 +408,52 @@ begin
 							end if; 
 						end loop;
 				  --Alien Bullet
-						if(alien_bullet.visible= '0') then
+						if(alien_bullet.visible= '0' and alien_move_ctr>ALIEN_MOVE_DELAY) then
 							for i in 0 to NUM_ALIENS-1 loop
 								if(aliens(NUM_ALIENS-1-i).visible = '1') then
 									alien_bullet.x_pos<= aliens(NUM_ALIENS-1-i).x_pos+SPRITE_WIDTH/2;
-									aliens_bullet.y_pos<=aliens(NUM_ALIENS-1-i).y_pos+SPRITE_HEIGHT;
+									alien_bullet.y_pos<=aliens(NUM_ALIENS-1-i).y_pos+SPRITE_HEIGHT;
+									alien_bullet.visible <= '1';
 									exit;
 									end if;
-								end loop;
+							end loop;
+						elsif(alien_bullet.visible = '1') then
+							if(alien_bullet.y_pos= SCREEN_HEIGHT+SPRITE_HEIGHT/2) then
+								alien_bullet.visible<= '0';
+							else 
+								alien_bullet.y_pos <= alien_bullet.y_pos+SPRITE_HEIGHT/2;
+								end if ;
+							end if; 
+							
+							if(alien_bullet.visible = '1' and 
+							alien_bullet.y_pos>= ALIEN_HEIGHT_BOTTOM and alien_bullet.y_pos<= SCREEN_HEIGHT and 
+							alien_bullet.x_pos>= ship.x_pos and alien_bullet.x_pos<= ship.x_pos+SPRITE_WIDTH) then
+								lives<= lives+1;
+								if(lives=3) then
+								else
+									alien_bullet.visible <= '0';
+									aliens_move_right <= '1';
+									alien_move_ctr := 0; 
+									ship_bullet.visible <='0';
+									alien_index := 0;
+									alien_offset_x := 0;
+									alien_offset_y := ALIEN_HEIGHT_TOP;
+									for i in 0 to 4 loop
+									-- 12 columns
+										for j in 0 to 11 loop
+											aliens(alien_index+j).x_pos <= alien_offset_x;
+											aliens(alien_index+j).y_pos <= alien_offset_y;
+											alien_offset_x := alien_offset_x + SPRITE_WIDTH;
+							  
+							end loop;
+							alien_offset_x := 0;
+							alien_offset_y := alien_offset_y + SPRITE_HEIGHT;
+							alien_index :=  alien_index + 12;
+						end loop;
+					end if; 
+				end if; 
+							
+							
 								
 				  ----------------------Check bullet collision-------------------------
 				  -- if( the bullet's (x,y) intersect's with any of the alien's (x,y) ) {
