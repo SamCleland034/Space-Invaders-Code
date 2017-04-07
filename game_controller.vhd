@@ -46,7 +46,7 @@ entity game_controller is
 			---------------GAMEPLAY----------------------
 
 			ADDRESS_WIDTH 		: integer := 3;				
-			ALIEN_MOVE_DELAY 	: integer := 8;
+			ALIEN_MOVE_DELAY 	: integer := 16;
 			ALIEN_DOWN_DELAY 	: integer := 8;
          NUM_ALIENS    		: integer := 60   
 
@@ -231,11 +231,27 @@ begin
                 when init  =>
                      current_state <= pre_game;
                 when pre_game =>
-							current_state <= pre_game;
+						if (shoot='1') then
+							current_state <= gameplay;
+							end if;
                 when gameplay =>
-							current_state <= pre_game;
+						if(score = 60) then 
+						-- winning the game
+							current_state<= game_over;
+						else 
+						--check if aliens at the bottom, then game over
+							for i in 0 to NUM_ALIENS-1 loop
+								if(aliens(i).y_pos>= ALIEN_HEIGHT_BOTTOM and aliens(i).visible= '1') then
+									current_state <=game_over;
+									exit;
+									end if;
+								end loop;
+									
+						end if;
                 when game_over =>
-							current_state <= pre_game;
+							if (shoot = '1') then
+							current_state <= init;
+							end if;
             end case;
         end if;
     end process;
@@ -245,7 +261,6 @@ begin
 	 	 variable alien_index    : integer := 0;
 		 variable alien_offset_x : integer := 0;
  		 variable alien_offset_y : integer := 0;
-		 
 		 variable alien_move_ctr : integer := 0;
 		 variable alien_down_ctr : integer := 0;
 
@@ -296,11 +311,32 @@ begin
 			  elsif (current_state = gameplay and slow_clk = '1') then
 
 				  --ADD GAME LOGIC HERE. HINTS PROVIDEDS
-				  
+				  --update leftmost and rightmost sprites
 				  --------------update alien movement counter-------------------------
 				  alien_move_ctr := alien_move_ctr + 1;
 				  -- alien_move_ctr divides the clk divider even more such that the aliens are slower than bullets or ship movements
-				  
+								if alien_move_ctr>ALIEN_MOVE_DELAY then
+									for i in 0 to NUM_ALIENS-1 loop 
+										if((aliens(i).x_pos= SCREEN_WIDTH-(2*SPRITE_WIDTH) and aliens_move_right= '1') or (aliens(i).x_pos=0 and aliens_move_right='0') ) then
+											for j in 0 to NUM_ALIENS-1 loop 
+												aliens(j).y_pos <= aliens(j).y_pos+SPRITE_HEIGHT;
+												end loop;
+												aliens_move_right<= not aliens_move_right;
+											exit;
+										
+										elsif(aliens_move_right = '1') then
+											for j in 0 to NUM_ALIENS-1 loop
+												aliens(j).x_pos<= aliens(j).x_pos+SPRITE_WIDTH/4;
+												end loop;
+										elsif(aliens_move_right = '0') then
+											for j in 0 to NUM_ALIENS-1 loop
+												aliens(j).x_pos<= aliens(j).x_pos - SPRITE_WIDTH/4;
+												end loop;
+											end if;
+										end loop;
+									end if; 
+											
+								
 				  -- if(alien_move_ctr > ALIEN_MOVE_DELAY){
 				  --		Move aliens either left/right or down
 				  -- 
@@ -313,7 +349,11 @@ begin
 				  --     hint: these if statements can be long and have more nested if statements					
 				  -- }
 				  
-
+						if(move_left= '1' and ship.x_pos>0) then
+							ship.x_pos<=ship.x_pos-SPRITE_WIDTH/2;
+						elsif(move_right='1' and ship.x_pos<SCREEN_WIDTH-(2*SPRITE_WIDTH)) then
+							ship.x_pos<= ship.x_pos+SPRITE_WIDTH/2;
+						end if;
 				  ----------------------------Update ship------------------------
 				  -- if ( the left button is pressed and the ship has room to the left){
 				  --		ship.x_pos = ship.x_pos - SPRITE_WIDTH/2;
@@ -321,7 +361,20 @@ begin
 				  -- 		ship.x_pos = ship.x_pos + SPRITE_WIDTH/2;
 				  ---}
 			
-				  
+						if(shoot = '1' and ship_bullet.visible = '0') then
+							ship_bullet.y_pos<= SHIP_HEIGHT;
+							ship_bullet.x_pos<= ship.x_pos+SPRITE_WIDTH/2;
+							ship_bullet.visible <= '1';
+						elsif(ship_bullet.visible= '1') then
+								if(ship_bullet.y_pos= 0) then
+									ship_bullet.visible <= '0';
+									
+								else 
+									ship_bullet.y_pos<= ship_bullet.y_pos- SPRITE_HEIGHT/2;
+							end if;
+						end if;	
+						
+						
 				  ---------------------------Shoot bullet-----------------------------
 				  -- if( shoot button is pressed and the bullet is currently invisible) {
 				  --		set the bullet's (x,y) position to the tip of the ship
@@ -334,8 +387,26 @@ begin
 				  --			set the bullet invisible
 				  --		}
 				  -- }
-		
-				  
+						for i in 0 to NUM_ALIENS-1 loop
+							if (aliens(i).visible = '1' and ship_bullet.visible = '1' and 
+							aliens(i).x_pos<=ship_bullet.x_pos and ship_bullet.x_pos<=(aliens(i).x_pos+SPRITE_WIDTH) and 
+							aliens(i).y_pos<=ship_bullet.y_pos and ship_bullet.y_pos<=(aliens(i).y_pos+SPRITE_HEIGHT)) then
+								score <= score+1; 
+								aliens(i).visible <= '0';
+								ship_bullet.visible <= '0';
+								exit;
+							end if; 
+						end loop;
+				  --Alien Bullet
+						if(alien_bullet.visible= '0') then
+							for i in 0 to NUM_ALIENS-1 loop
+								if(aliens(NUM_ALIENS-1-i).visible = '1') then
+									alien_bullet.x_pos<= aliens(NUM_ALIENS-1-i).x_pos+SPRITE_WIDTH/2;
+									aliens_bullet.y_pos<=aliens(NUM_ALIENS-1-i).y_pos+SPRITE_HEIGHT;
+									exit;
+									end if;
+								end loop;
+								
 				  ----------------------Check bullet collision-------------------------
 				  -- if( the bullet's (x,y) intersect's with any of the alien's (x,y) ) {
 				  -- 		score = score + 1
@@ -403,8 +474,7 @@ begin
 					   draw_digit ( pixel_x,score/1000,0,sprite_addr_formal,sprite_col_formal);
 						sprite_addr <= sprite_addr_formal;
 						sprite_col  <= sprite_col_formal;
-						
-					elsif (pixel_x < LETTER_WIDTH*2) then
+						elsif (pixel_x < LETTER_WIDTH*2) then
 						row_color <= "111";
 						sprite_row <=  y_std(ROW_MSB downto ROW_LSB);
 					   draw_digit ( pixel_x,score/100,LETTER_WIDTH,sprite_addr_formal,sprite_col_formal);
